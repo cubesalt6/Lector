@@ -940,12 +940,14 @@ function userDocRef(uid) {
   return doc(db, 'users', uid);
 }
 
-function saveState(patch = {}) {
+function saveState(patch = {}, immediate = false) {
   state = { ...state, ...patch, updatedAt: Date.now() };
   saveLocalCache(state);
   if (!currentUser) return;
+
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
+
+  const doSave = async () => {
     try {
       justSavedAt = Date.now();
       await setDoc(userDocRef(currentUser.uid), state, { merge: false });
@@ -953,7 +955,13 @@ function saveState(patch = {}) {
       console.error(err);
       showToast('저장 중 오류가 발생했습니다.');
     }
-  }, 500);
+  };
+
+  if (immediate) {
+    doSave(); // 디바운스 없이 바로 Firestore에 씀
+  } else {
+    saveTimer = setTimeout(doSave, 500);
+  }
 }
 
 async function loadStateFromCloud(uid) {
@@ -1293,6 +1301,16 @@ document.addEventListener('mousedown', (e) => {
   }
 });
 
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && saveTimer) {
+    clearTimeout(saveTimer);
+    if (currentUser) {
+      justSavedAt = Date.now();
+      setDoc(userDocRef(currentUser.uid), state, { merge: false }).catch(console.error);
+    }
+  }
+});
+
 function positionToolbar(cx, cy) {
   hlToolbar.classList.add('visible');
   const tw = hlToolbar.offsetWidth || 250;
@@ -1486,7 +1504,7 @@ function deleteText(id) {
   if (state.currentTextId === id) {
     newCurrent = remaining.length ? remaining[0].id : null;
   }
-  saveState({ texts: remaining, currentTextId: newCurrent });
+  saveState({ texts: remaining, currentTextId: newCurrent }, true);
   hydrateUI();
   showToast('글을 삭제했습니다.');
 }
@@ -1549,7 +1567,7 @@ document.getElementById('upload-confirm').addEventListener('click', () => {
     if (t) {
       t.title = title;
       t.content = raw;
-      saveState({ texts: state.texts });
+      saveState({ texts, currentTextId: id }, true);
       if (state.currentTextId === t.id) hydrateUI();
       else renderTextList();
       showToast('텍스트를 수정했습니다.');
@@ -1562,7 +1580,7 @@ document.getElementById('upload-confirm').addEventListener('click', () => {
       createdAt: Date.now()
     };
     const texts = state.texts ? [...state.texts, newText] : [newText];
-    saveState({ texts, currentTextId: id });
+    saveState({ texts, currentTextId: id }, true);
     hydrateUI();
     showToast('새 텍스트를 추가했습니다. (클라우드에 저장됨)');
   }
