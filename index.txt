@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lector — 긴 글 읽기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --bg2: #ede7d9;
+    --paper: #faf7f2;
+    --ink: #1a1208;
+    --ink2: #4a3f2f;
+    --ink3: #8a7a65;
+    --accent: #b85c2a;
+    --accent2: #7a3f1e;
+    --sidebar-bg: #1a1208;
+    --sidebar-text: #e8dfc8;
+    --hl-yellow: rgba(255, 220, 60, 0.45);
+    --hl-green: rgba(100, 210, 140, 0.45);
+    --hl-pink: rgba(255, 140, 160, 0.45);
+    --hl-blue: rgba(100, 180, 255, 0.45);
+    --hl-red: rgba(255, 90, 70, 0.45);
+    --progress-h: 3px;
+    --sidebar-w: 320px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── PROGRESS BAR ── */
+  #progress-bar {
+    position: fixed;
+    top: 0; left: 0;
+    height: var(--progress-h);
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), #e88a50);
+    z-index: 9999;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 8px rgba(184,92,42,0.6);
+  }
+
+  /* ── TOP NAV ── */
+  #topnav {
+    position: fixed;
+    top: var(--progress-h);
+    left: 0; right: 0;
+    height: 52px;
+    background: rgba(245,240,232,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(184,92,42,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 100;
+  }
+
+  #topnav .brand {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.3rem;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    font-style: italic;
+  }
+
+  #topnav .nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .nav-btn {
+    background: none;
+    border: 1.5px solid var(--ink3);
+    color: var(--ink2);
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+  .nav-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  #progress-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.75rem;
+    color: var(--ink3);
+    font-weight: 300;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  #user-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.72rem;
+    color: var(--ink3);
+  }
+  #user-chip .avatar {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  /* ── HIGHLIGHTER TOOLBAR (appears on selection) ── */
+  #hl-toolbar {
+    position: fixed;
+    background: var(--sidebar-bg);
+    border-radius: 10px;
+    padding: 7px 10px;
+    display: none;
+    gap: 7px;
+    align-items: center;
+    z-index: 9000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    transform: translateY(-8px);
+  }
+  #hl-toolbar.visible { display: flex; }
+
+  #hl-toolbar .hl-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.7rem;
+    color: #aaa;
+    margin-right: 2px;
+    white-space: nowrap;
+  }
+
+  .hl-color-btn {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .hl-color-btn:hover { transform: scale(1.25); border-color: #fff; }
+  .hl-color-btn[data-color="yellow"] { background: #ffd93c; }
+  .hl-color-btn[data-color="green"]  { background: #64d28c; }
+  .hl-color-btn[data-color="pink"]   { background: #ff8ca0; }
+  .hl-color-btn[data-color="blue"]   { background: #64b4ff; }
+  .hl-color-btn[data-color="red"]    { background: #ff5a46; }
+
+  .hl-action-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.7rem;
+    cursor: pointer;
+    margin-left: 4px;
+    transition: background 0.15s;
+  }
+  .hl-action-btn:hover { background: rgba(255,255,255,0.2); }
+
+  /* ── MAIN LAYOUT ── */
+  #layout {
+    display: flex;
+    padding-top: 55px;
+    min-height: 100vh;
+  }
+
+  /* ── READER ── */
+  #reader-wrap {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding: 60px 24px 120px;
+    transition: margin-right 0.35s cubic-bezier(.4,0,.2,1);
+  }
+  #reader-wrap.sidebar-open { margin-right: var(--sidebar-w); }
+
+  #reader {
+    max-width: 680px;
+    width: 100%;
+  }
+
+  #text-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.15;
+    color: var(--ink);
+    margin-bottom: 8px;
+    font-style: italic;
+  }
+  #text-subtitle {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.85rem;
+    color: var(--ink3);
+    font-weight: 300;
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    letter-spacing: 0.05em;
+  }
+
+  #text-content {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 1.08rem;
+    line-height: 2;
+    color: var(--ink);
+    word-break: keep-all;
+    word-wrap: break-word;
+  }
+
+  #text-content p {
+    margin-bottom: 1.8em;
+    text-indent: 1.2em;
+  }
+  #text-content p:first-child { text-indent: 0; }
+
+  #text-content .chapter {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    font-style: italic;
+    color: var(--accent);
+    margin: 3em 0 1.2em;
+    text-indent: 0;
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+  }
+
+  /* highlight spans */
+  .hl {
+    border-radius: 2px;
+    cursor: pointer;
+    transition: filter 0.15s;
+    position: relative;
+    color: inherit; /* NEVER let a highlight override the text color */
+  }
+  .hl:hover { filter: brightness(0.88); }
+  .hl.yellow { background: var(--hl-yellow); }
+  .hl.green  { background: var(--hl-green); }
+  .hl.pink   { background: var(--hl-pink); }
+  .hl.blue   { background: var(--hl-blue); }
+  .hl.red    { background: var(--hl-red); }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    position: fixed;
+    top: 55px; right: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  #sidebar.open { transform: translateX(0); }
+
+  #sidebar-head {
+    padding: 22px 22px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #sidebar-head h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem;
+    font-style: italic;
+    color: #e8dfc8;
+    letter-spacing: 0.03em;
+  }
+  #sidebar-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1.3rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  #sidebar-close:hover { color: #fff; }
+
+  #sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .stab {
+    flex: 1;
+    padding: 11px 0;
+    text-align: center;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.75rem;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .stab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .stab:hover:not(.active) { color: #aaa; }
+
+  #sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  #sidebar-body::-webkit-scrollbar { width: 4px; }
+  #sidebar-body::-webkit-scrollbar-track { background: transparent; }
+  #sidebar-body::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* bookmark / highlight cards */
+  .bm-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    padding: 13px 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+  }
+  .bm-card:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.14); }
+
+  .bm-card .bm-text {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--sidebar-text);
+    opacity: 0.88;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .bm-card .bm-meta {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.68rem;
+    color: #666;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bm-card .bm-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .bm-dot.yellow { background: #ffd93c; }
+  .bm-dot.green  { background: #64d28c; }
+  .bm-dot.pink   { background: #ff8ca0; }
+  .bm-dot.blue   { background: #64b4ff; }
+  .bm-dot.red    { background: #ff5a46; }
+  .bm-dot.pos    { background: var(--accent); }
+
+  .bm-del {
+    position: absolute;
+    top: 10px; right: 10px;
+    background: none;
+    border: none;
+    color: #555;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: color 0.15s;
+    line-height: 1;
+  }
+  .bm-del:hover { color: #ff7070; }
+
+  .empty-hint {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.8rem;
+    color: #555;
+    text-align: center;
+    padding: 40px 0;
+    line-height: 2;
+  }
+
+  /* position save card */
+  #pos-panel .pos-info {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.8rem;
+    color: #aaa;
+    margin-bottom: 16px;
+    line-height: 1.8;
+  }
+  #pos-panel .pos-info strong { color: var(--sidebar-text); }
+
+  #save-pos-btn {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    border: none;
+    border-radius: 7px;
+    color: #fff;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background 0.2s;
+    margin-bottom: 10px;
+  }
+  #save-pos-btn:hover { background: var(--accent2); }
+
+  #goto-pos-btn {
+    width: 100%;
+    padding: 11px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 7px;
+    color: var(--sidebar-text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background 0.2s;
+  }
+  #goto-pos-btn:hover { background: rgba(255,255,255,0.1); }
+
+  /* saved position marker in text */
+  .pos-marker {
+    display: block;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    margin: 0 -8px;
+    position: relative;
+  }
+  .pos-marker::before {
+    content: 'Last read';
+    position: absolute;
+    left: 0;
+    top: -20px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.65rem;
+    color: var(--accent);
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--accent);
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+
+  /* font size controls */
+  .font-control {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1.5px solid var(--ink3);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .font-btn {
+    background: none;
+    border: none;
+    padding: 4px 10px;
+    color: var(--ink2);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.15s;
+    line-height: 1;
+  }
+  .font-btn:hover { background: rgba(0,0,0,0.07); }
+  #font-size-label {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.7rem;
+    color: var(--ink3);
+    padding: 0 6px;
+    border-left: 1px solid var(--ink3);
+    border-right: 1px solid var(--ink3);
+    white-space: nowrap;
+  }
+
+  /* toast */
+  #toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    padding: 10px 22px;
+    border-radius: 30px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 9999;
+    pointer-events: none;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* text upload area */
+  #upload-zone {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,18,8,0.92);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #upload-zone.visible { display: flex; }
+  #upload-zone h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem;
+    color: #e8dfc8;
+    font-style: italic;
+  }
+  #upload-zone p {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.85rem;
+    color: #888;
+  }
+  #upload-zone textarea {
+    width: min(600px, 90vw);
+    height: 260px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    color: #e8dfc8;
+    font-family: 'Nanum Myeongjo', serif;
+    font-size: 0.95rem;
+    padding: 16px;
+    resize: vertical;
+    line-height: 1.7;
+    outline: none;
+  }
+  #upload-zone textarea:focus { border-color: var(--accent); }
+  .upload-actions { display: flex; gap: 10px; }
+  .upload-btn-primary {
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    padding: 11px 28px;
+    border-radius: 7px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .upload-btn-primary:hover { background: var(--accent2); }
+  .upload-btn-sec {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #aaa;
+    padding: 11px 22px;
+    border-radius: 7px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .upload-btn-sec:hover { background: rgba(255,255,255,0.07); }
+
+  #upload-title-input {
+    width: min(600px, 90vw);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #e8dfc8;
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem;
+    font-style: italic;
+    padding: 11px 16px;
+    outline: none;
+  }
+  #upload-title-input:focus { border-color: var(--accent); }
+  #upload-title-input::placeholder { color: #555; }
+
+  /* ── LOGIN OVERLAY ── */
+  #login-zone {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #login-zone.hidden { display: none; }
+  #login-box {
+    width: min(360px, 88vw);
+    background: var(--paper);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 14px;
+    padding: 34px 30px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+  }
+  #login-box h1 {
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    color: var(--accent);
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+  }
+  #login-box p.sub {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink3);
+    margin-bottom: 22px;
+  }
+  .login-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 7px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+    outline: none;
+    background: #fff;
+    color: var(--ink);
+  }
+  .login-input:focus { border-color: var(--accent); }
+  .login-btn-row { display: flex; gap: 8px; margin-top: 6px; }
+  .login-btn {
+    flex: 1;
+    padding: 11px;
+    border-radius: 7px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    letter-spacing: 0.03em;
+    transition: background 0.2s;
+  }
+  .login-btn.primary { background: var(--accent); color: #fff; }
+  .login-btn.primary:hover { background: var(--accent2); }
+  .login-btn.sec { background: none; border: 1.5px solid var(--ink3); color: var(--ink2); }
+  .login-btn.sec:hover { background: rgba(0,0,0,0.05); }
+  #login-error {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.75rem;
+    color: #c0392b;
+    margin-top: 10px;
+    min-height: 1em;
+  }
+  #login-status {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink3);
+  }
+
+  @media (max-width: 600px) {
+    #sidebar { width: 100%; }
+    :root { --sidebar-w: 100%; }
+    #reader-wrap.sidebar-open { margin-right: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+
+<!-- Login Overlay -->
+<div id="login-zone">
+  <div id="login-box">
+    <h1>Lector</h1>
+    <p class="sub">로그인해야 저장된 글과 하이라이트를 볼 수 있습니다.</p>
+    <input type="email" id="login-email" class="login-input" placeholder="이메일" autocomplete="username">
+    <input type="password" id="login-password" class="login-input" placeholder="비밀번호" autocomplete="current-password">
+    <div class="login-btn-row">
+      <button class="login-btn primary" id="login-signin-btn">로그인</button>
+      <button class="login-btn sec" id="login-signup-btn">회원가입</button>
+    </div>
+    <div id="login-error"></div>
+  </div>
+  <div id="login-status"></div>
+</div>
+
+<nav id="topnav">
+  <span class="brand">Lector</span>
+  <div class="nav-controls">
+    <span id="user-chip" style="display:none;"></span>
+    <div class="font-control">
+      <button class="font-btn" id="font-dec">A-</button>
+      <span id="font-size-label">17px</span>
+      <button class="font-btn" id="font-inc">A+</button>
+    </div>
+    <button class="nav-btn" id="load-btn">텍스트 불러오기</button>
+    <button class="nav-btn" id="sidebar-toggle">북마크 &amp; 기록</button>
+    <button class="nav-btn" id="logout-btn">로그아웃</button>
+    <span id="progress-label">0%</span>
+  </div>
+</nav>
+
+<!-- Highlight Toolbar -->
+<div id="hl-toolbar">
+  <span class="hl-label">하이라이트</span>
+  <button class="hl-color-btn" data-color="yellow" title="노란색"></button>
+  <button class="hl-color-btn" data-color="green"  title="초록색"></button>
+  <button class="hl-color-btn" data-color="pink"   title="분홍색"></button>
+  <button class="hl-color-btn" data-color="blue"   title="파란색"></button>
+  <button class="hl-color-btn" data-color="red"    title="빨간색"></button>
+  <button class="hl-action-btn" id="hl-cancel">취소</button>
+</div>
+
+<!-- Main Layout -->
+<div id="layout">
+  <div id="reader-wrap">
+    <div id="reader">
+      <div id="text-title">제목 없음</div>
+      <div id="text-subtitle">Lector — 텍스트를 불러와 읽기 시작하세요</div>
+      <div id="text-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sidebar-head">
+    <h2>독서 기록</h2>
+    <button id="sidebar-close">x</button>
+  </div>
+  <div id="sidebar-tabs">
+    <div class="stab active" data-tab="pos">위치 저장</div>
+    <div class="stab" data-tab="highlights">하이라이트</div>
+  </div>
+  <div id="sidebar-body">
+    <div class="tab-panel active" id="pos-panel">
+      <div class="pos-info" id="pos-info">저장된 위치가 없습니다.<br>현재 읽는 위치를 저장해 두세요.</div>
+      <button id="save-pos-btn">현재 위치 저장</button>
+      <button id="goto-pos-btn">저장된 위치로 이동</button>
+    </div>
+    <div class="tab-panel" id="highlights-panel">
+      <div id="hl-list"><div class="empty-hint">텍스트를 드래그하여<br>하이라이트를 추가하세요.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Upload Zone -->
+<div id="upload-zone">
+  <h3>텍스트 불러오기</h3>
+  <p>제목과 본문을 입력하거나 붙여넣으세요.</p>
+  <input type="text" id="upload-title-input" placeholder="제목 (선택)">
+  <textarea id="upload-textarea" placeholder="여기에 긴 텍스트를 붙여넣으세요...&#10;&#10;문단은 빈 줄로 구분됩니다.&#10;## 제목 형식으로 챕터를 추가할 수 있어요."></textarea>
+  <div class="upload-actions">
+    <button class="upload-btn-primary" id="upload-confirm">불러오기</button>
+    <button class="upload-btn-sec" id="upload-cancel">취소</button>
+  </div>
+</div>
+
+<script type="module">
+/* ============================================================
+   FIREBASE 설정
+   아래 firebaseConfig 값을 본인의 Firebase 프로젝트 설정으로
+   바꿔주세요. (Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱)
+   그리고 Firebase 콘솔에서:
+     1) Authentication > Sign-in method > "이메일/비밀번호" 사용 설정
+     2) Firestore Database 생성 (프로덕션 모드 권장)
+     3) Firestore 규칙에 아래를 넣어 본인 데이터만 읽고 쓰게 제한:
+
+     rules_version = '2';
+     service cloud.firestore {
+       match /databases/{database}/documents {
+         match /users/{uid} {
+           allow read, write: if request.auth != null && request.auth.uid == uid;
+         }
+       }
+     }
+   ============================================================ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAO_L8mQaw-zEZKjerhUDlkZC-0Wxaf6_w",
+  authDomain: "lector-3aeb8.firebaseapp.com",
+  projectId: "lector-3aeb8",
+  storageBucket: "lector-3aeb8.firebasestorage.app",
+  messagingSenderId: "858227103530",
+  appId: "1:858227103530:web:29dd71e68a88faf146f053",
+  measurementId: "G-H8KZ52PF1C"
+};
+
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+// ── STATE ──
+const LOCAL_CACHE_KEY = 'lector_v1_cache';
+
+function loadLocalCache() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY)) || {}; } catch { return {}; }
+}
+function saveLocalCache(s) {
+  try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(s)); } catch {}
+}
+
+let state = {};
+let currentUser = null;
+let unsubscribeSnapshot = null;
+let saveTimer = null;
+let justSavedAt = 0; // to avoid re-render loop right after our own write
+
+// ── ELEMENTS ──
+const progressBar   = document.getElementById('progress-bar');
+const progressLabel = document.getElementById('progress-label');
+const readerWrap    = document.getElementById('reader-wrap');
+const textTitle     = document.getElementById('text-title');
+const textSubtitle  = document.getElementById('text-subtitle');
+const textContent   = document.getElementById('text-content');
+const hlToolbar     = document.getElementById('hl-toolbar');
+const sidebar       = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const sidebarClose  = document.getElementById('sidebar-close');
+const posInfo       = document.getElementById('pos-info');
+const savePosBtnEl  = document.getElementById('save-pos-btn');
+const gotoPosBtnEl  = document.getElementById('goto-pos-btn');
+const hlList        = document.getElementById('hl-list');
+const toast         = document.getElementById('toast');
+const uploadZone    = document.getElementById('upload-zone');
+const uploadTA      = document.getElementById('upload-textarea');
+const uploadTitleIn = document.getElementById('upload-title-input');
+const fontSizeLabel = document.getElementById('font-size-label');
+const loginZone      = document.getElementById('login-zone');
+const loginEmail     = document.getElementById('login-email');
+const loginPassword  = document.getElementById('login-password');
+const loginSigninBtn = document.getElementById('login-signin-btn');
+const loginSignupBtn = document.getElementById('login-signup-btn');
+const loginError     = document.getElementById('login-error');
+const loginStatus    = document.getElementById('login-status');
+const userChip       = document.getElementById('user-chip');
+const logoutBtn      = document.getElementById('logout-btn');
+
+let currentFontSize = 17;
+
+// ── FIRESTORE SAVE / LOAD ──
+function userDocRef(uid) {
+  return doc(db, 'users', uid);
+}
+
+// Debounced write to Firestore so we don't spam it on every keystroke/drag
+function saveState(patch = {}) {
+  state = { ...state, ...patch, updatedAt: Date.now() };
+  saveLocalCache(state);
+  if (!currentUser) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      justSavedAt = Date.now();
+      await setDoc(userDocRef(currentUser.uid), state, { merge: true });
+    } catch (err) {
+      console.error(err);
+      showToast('저장 중 오류가 발생했습니다.');
+    }
+  }, 500);
+}
+
+async function loadStateFromCloud(uid) {
+  const snap = await getDoc(userDocRef(uid));
+  if (snap.exists()) return snap.data();
+  return {};
+}
+
+function listenToCloud(uid) {
+  if (unsubscribeSnapshot) unsubscribeSnapshot();
+  unsubscribeSnapshot = onSnapshot(userDocRef(uid), (snap) => {
+    if (!snap.exists()) return;
+    // Ignore the echo of our own recent write
+    if (Date.now() - justSavedAt < 1500) return;
+    const remote = snap.data();
+    if (remote && remote.updatedAt && remote.updatedAt !== state.updatedAt) {
+      state = remote;
+      saveLocalCache(state);
+      hydrateUI();
+      showToast('다른 기기에서 업데이트된 내용을 불러왔습니다.');
+    }
+  });
+}
+
+// ── AUTH ──
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUser = user;
+    loginZone.classList.add('hidden');
+    userChip.style.display = 'flex';
+    userChip.innerHTML = `<span class="avatar">${(user.email || '?')[0].toUpperCase()}</span><span>${user.email}</span>`;
+
+    loginStatus.textContent = '';
+    state = await loadStateFromCloud(user.uid);
+    if (!state || Object.keys(state).length === 0) {
+      // first login: seed with sample text
+      state = {
+        text: SAMPLE_TEXT, title: SAMPLE_TITLE, highlights: [],
+        savedPos: null, savedTime: null, fontSize: 17, autoScroll: 0
+      };
+      saveState({});
+    }
+    saveLocalCache(state);
+    hydrateUI();
+    listenToCloud(user.uid);
+  } else {
+    currentUser = null;
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    loginZone.classList.remove('hidden');
+    userChip.style.display = 'none';
+    loginError.textContent = '';
+  }
+});
+
+loginSigninBtn.addEventListener('click', async () => {
+  loginError.textContent = '';
+  try {
+    loginStatus.textContent = '로그인 중...';
+    await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
+  } catch (err) {
+    loginStatus.textContent = '';
+    loginError.textContent = translateAuthError(err.code);
+  }
+});
+
+loginSignupBtn.addEventListener('click', async () => {
+  loginError.textContent = '';
+  try {
+    loginStatus.textContent = '계정 생성 중...';
+    await createUserWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
+  } catch (err) {
+    loginStatus.textContent = '';
+    loginError.textContent = translateAuthError(err.code);
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await signOut(auth);
+  showToast('로그아웃되었습니다.');
+});
+
+function translateAuthError(code) {
+  switch (code) {
+    case 'auth/invalid-email': return '이메일 형식이 올바르지 않습니다.';
+    case 'auth/user-not-found': return '가입되지 않은 이메일입니다.';
+    case 'auth/wrong-password': return '비밀번호가 일치하지 않습니다.';
+    case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
+    case 'auth/weak-password': return '비밀번호는 6자 이상이어야 합니다.';
+    case 'auth/invalid-credential': return '이메일 또는 비밀번호가 올바르지 않습니다.';
+    default: return '오류가 발생했습니다. (' + code + ')';
+  }
+}
+
+// ── FONT SIZE ──
+function applyFontSize(s) {
+  currentFontSize = s;
+  textContent.style.fontSize = s + 'px';
+  fontSizeLabel.textContent = s + 'px';
+  saveState({ fontSize: s });
+}
+document.getElementById('font-inc').addEventListener('click', () => applyFontSize(Math.min(26, currentFontSize + 1)));
+document.getElementById('font-dec').addEventListener('click', () => applyFontSize(Math.max(13, currentFontSize - 1)));
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+// ── HYDRATE UI FROM STATE (after login / remote update) ──
+function hydrateUI() {
+  currentFontSize = parseInt(state.fontSize || 17);
+  applyFontSizeSilently(currentFontSize);
+  if (state.text) {
+    renderText(state.text, state.title || '');
+    if (state.autoScroll) {
+      setTimeout(() => window.scrollTo(0, state.autoScroll), 300);
+    }
+    renderSavedMarker();
+  }
+  renderHlList();
+  updatePosInfo();
+}
+function applyFontSizeSilently(s) {
+  currentFontSize = s;
+  textContent.style.fontSize = s + 'px';
+  fontSizeLabel.textContent = s + 'px';
+}
+
+// ── RENDER TEXT ──
+function renderText(raw, title) {
+  textTitle.textContent = title || '제목 없음';
+  textSubtitle.textContent = 'Lector — 자유롭게 하이라이트하고 위치를 저장하세요';
+  textContent.innerHTML = '';
+
+  const lines = raw.split('\n');
+  let para = [];
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      if (para.length) {
+        flushPara(para.join(' '));
+        para = [];
+      }
+    } else if (trimmed.startsWith('## ')) {
+      if (para.length) { flushPara(para.join(' ')); para = []; }
+      const ch = document.createElement('p');
+      ch.className = 'chapter';
+      ch.textContent = trimmed.slice(3);
+      textContent.appendChild(ch);
+    } else {
+      para.push(trimmed);
+    }
+  });
+  if (para.length) flushPara(para.join(' '));
+}
+
+function flushPara(text) {
+  const p = document.createElement('p');
+  p.textContent = text;
+  textContent.appendChild(p);
+}
+
+// ── PROGRESS ──
+function updateProgress() {
+  const scrolled = window.scrollY;
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  const pct = total > 0 ? Math.round((scrolled / total) * 100) : 0;
+  progressBar.style.width = pct + '%';
+  progressLabel.textContent = pct + '%';
+  if (state.text) {
+    saveState({ autoScroll: scrolled });
+  }
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+
+// ── POSITION SAVE ──
+function updatePosInfo() {
+  if (state.savedPos != null) {
+    const total = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = total > 0 ? Math.round((state.savedPos / total) * 100) : 0;
+    posInfo.innerHTML = '<strong>저장된 위치:</strong> 전체의 ' + pct + '% 지점<br><small style="color:#666">(' + new Date(state.savedTime || Date.now()).toLocaleString('ko-KR') + ')</small>';
+  } else {
+    posInfo.innerHTML = '저장된 위치가 없습니다.<br>현재 읽는 위치를 저장해 두세요.';
+  }
+}
+
+savePosBtnEl.addEventListener('click', () => {
+  saveState({ savedPos: window.scrollY, savedTime: Date.now() });
+  updatePosInfo();
+  renderSavedMarker();
+  showToast('현재 위치를 저장했습니다. (클라우드 동기화됨)');
+});
+
+gotoPosBtnEl.addEventListener('click', () => {
+  if (state.savedPos == null) { showToast('저장된 위치가 없습니다.'); return; }
+  window.scrollTo({ top: state.savedPos, behavior: 'smooth' });
+  showToast('저장된 위치로 이동합니다.');
+});
+
+function renderSavedMarker() {
+  document.querySelectorAll('.pos-marker').forEach(el => el.remove());
+  if (state.savedPos == null || !state.text) return;
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  if (!total) return;
+  const ratio = state.savedPos / total;
+  const contentH = textContent.scrollHeight;
+  const targetY = contentH * ratio;
+
+  const children = textContent.querySelectorAll('p');
+  let bestEl = null, bestDist = Infinity;
+  children.forEach(el => {
+    const top = el.offsetTop;
+    const dist = Math.abs(top - targetY);
+    if (dist < bestDist) { bestDist = dist; bestEl = el; }
+  });
+  if (bestEl) {
+    const marker = document.createElement('span');
+    marker.className = 'pos-marker';
+    bestEl.parentNode.insertBefore(marker, bestEl);
+  }
+}
+
+// ── HIGHLIGHT ENGINE ──
+let currentSelection = null;
+const VALID_COLORS = new Set(['yellow', 'green', 'pink', 'blue', 'red']); // bugfix: 'red' was missing
+
+document.addEventListener('mouseup', (e) => {
+  if (hlToolbar.contains(e.target)) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+    hlToolbar.classList.remove('visible');
+    return;
+  }
+  if (!textContent.contains(sel.anchorNode)) {
+    hlToolbar.classList.remove('visible');
+    return;
+  }
+  currentSelection = sel;
+  positionToolbar(e.clientX, e.clientY);
+});
+
+document.addEventListener('mousedown', (e) => {
+  if (!hlToolbar.contains(e.target)) {
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) hlToolbar.classList.remove('visible');
+    }, 100);
+  }
+});
+
+function positionToolbar(cx, cy) {
+  hlToolbar.classList.add('visible');
+  const tw = hlToolbar.offsetWidth || 250;
+  const th = hlToolbar.offsetHeight || 48;
+  let left = cx - tw / 2;
+  let top  = cy - th - 14 + window.scrollY;
+  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+  hlToolbar.style.left = left + 'px';
+  hlToolbar.style.top  = top + 'px';
+}
+
+document.querySelectorAll('.hl-color-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!currentSelection || currentSelection.isCollapsed) return;
+    applyHighlight(currentSelection, btn.dataset.color);
+    window.getSelection().removeAllRanges();
+    hlToolbar.classList.remove('visible');
+    currentSelection = null;
+  });
+});
+
+document.getElementById('hl-cancel').addEventListener('click', () => {
+  window.getSelection().removeAllRanges();
+  hlToolbar.classList.remove('visible');
+  currentSelection = null;
+});
+
+function applyHighlight(sel, color) {
+  // bugfix: guard against unknown colors (this is what made "red" swallow the
+  // text — the span got class="hl red" but there was no CSS rule for it,
+  // so it rendered with no background AND no forced text color safeguard)
+  if (!VALID_COLORS.has(color)) color = 'yellow';
+
+  const range = sel.getRangeAt(0);
+  const text = sel.toString().trim();
+  if (!text) return;
+
+  const span = document.createElement('span');
+  span.className = 'hl ' + color;
+  const id = 'hl_' + Date.now();
+  span.dataset.hlId = id;
+
+  try {
+    range.surroundContents(span);
+  } catch {
+    // multi-node selection fallback: extract and wrap (does not delete text,
+    // just moves the selected nodes into the new span)
+    const fragment = range.extractContents();
+    span.appendChild(fragment);
+    range.insertNode(span);
+  }
+
+  attachHlClick(span);
+
+  const highlights = state.highlights ? [...state.highlights] : [];
+  highlights.push({ id, color, text: text.slice(0, 300), time: Date.now() });
+  saveState({ highlights });
+  renderHlList();
+  showToast('하이라이트를 추가했습니다.');
+}
+
+function attachHlClick(span) {
+  span.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    const id = span.dataset.hlId;
+    const parent = span.parentNode;
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+    parent.removeChild(span);
+    parent.normalize();
+    if (state.highlights) {
+      saveState({ highlights: state.highlights.filter(h => h.id !== id) });
+    }
+    renderHlList();
+    showToast('하이라이트를 삭제했습니다.');
+  });
+}
+
+// ── HIGHLIGHT LIST ──
+function renderHlList() {
+  const hl = state.highlights || [];
+  if (!hl.length) {
+    hlList.innerHTML = '<div class="empty-hint">텍스트를 드래그하여<br>하이라이트를 추가하세요.<br><small style="color:#555">더블클릭으로 삭제</small></div>';
+    return;
+  }
+  hlList.innerHTML = '';
+  [...hl].reverse().forEach(h => {
+    const card = document.createElement('div');
+    card.className = 'bm-card';
+    card.innerHTML = `
+      <div class="bm-text">${escapeHtml(h.text)}</div>
+      <div class="bm-meta">
+        <span class="bm-dot ${h.color}"></span>
+        <span>${new Date(h.time).toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <button class="bm-del" data-id="${h.id}" title="삭제">x</button>
+    `;
+    card.addEventListener('click', (e) => {
+      if (e.target.classList.contains('bm-del')) return;
+      const el = document.querySelector(`[data-hl-id="${h.id}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '2px solid var(--accent)';
+        setTimeout(() => el.style.outline = '', 1500);
+      } else {
+        showToast('해당 하이라이트를 찾을 수 없습니다.');
+      }
+    });
+    card.querySelector('.bm-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = e.target.dataset.id;
+      const el = document.querySelector(`[data-hl-id="${id}"]`);
+      if (el) {
+        const parent = el.parentNode;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        parent.removeChild(el);
+        parent.normalize();
+      }
+      saveState({ highlights: (state.highlights || []).filter(h => h.id !== id) });
+      renderHlList();
+      showToast('삭제되었습니다.');
+    });
+    hlList.appendChild(card);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── SIDEBAR ──
+sidebarToggle.addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+  readerWrap.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
+});
+sidebarClose.addEventListener('click', () => {
+  sidebar.classList.remove('open');
+  readerWrap.classList.remove('sidebar-open');
+});
+
+document.querySelectorAll('.stab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
+  });
+});
+
+// ── UPLOAD ──
+document.getElementById('load-btn').addEventListener('click', () => {
+  uploadZone.classList.add('visible');
+  uploadTA.focus();
+});
+document.getElementById('upload-cancel').addEventListener('click', () => {
+  uploadZone.classList.remove('visible');
+});
+document.getElementById('upload-confirm').addEventListener('click', () => {
+  const raw = uploadTA.value.trim();
+  if (!raw) { showToast('텍스트를 입력해 주세요.'); return; }
+  const title = uploadTitleIn.value.trim() || '제목 없음';
+  saveState({ text: raw, title, highlights: [], savedPos: null, savedTime: null, autoScroll: 0 });
+  uploadZone.classList.remove('visible');
+  renderText(raw, title);
+  renderHlList();
+  updatePosInfo();
+  window.scrollTo(0, 0);
+  showToast('텍스트를 불러왔습니다. (클라우드에 저장됨)');
+});
+
+// ── SAMPLE TEXT (first login seed) ──
+const SAMPLE_TITLE = '토끼전 (兎傳)';
+const SAMPLE_TEXT = `## 1장 — 용궁의 위기
+
+옛날 옛적에 남해 바다 깊숙이 용왕이 살고 있었다. 그 용왕은 모든 바다 생물을 다스리는 막강한 권력을 가지고 있었으나, 어느 날 갑작스러운 병에 걸리고 말았다. 어의들은 밤낮으로 머리를 맞대고 처방을 연구했으나, 어떤 약을 써도 효과가 없었다.
+
+그러던 어느 날, 한 도사가 나타나 말했다. "대왕마마의 병은 토끼의 간을 드셔야만 나을 수 있습니다. 살아있는 토끼의 간이라야 효험이 있사옵니다."
+
+용왕은 크게 놀라며 신하들을 불러들였다. "누가 육지에 올라가 토끼를 잡아올 수 있겠느냐?" 그러나 바다 생물들은 모두 고개를 저었다. 육지는 너무 낯설고 위험한 곳이었다.
+
+## 2장 — 자라의 결심
+
+한참 동안 침묵이 흘렀을 때, 자라 한 마리가 앞으로 나섰다. 자라는 물과 뭍을 모두 다닐 수 있는 자신의 능력을 자랑스러워했으며, 용왕에 대한 충성심도 남달랐다.
+
+"소신이 다녀오겠습니다, 대왕마마."
+
+용왕은 크게 기뻐하며 자라에게 황금 안장과 온갖 보물을 들려 보냈다. 자라는 육지로 오르는 법, 토끼를 유인하는 법을 곰곰이 생각하며 바다를 헤엄쳐 나아갔다.
+
+마침내 육지에 오른 자라는 산과 들을 헤매며 토끼의 흔적을 찾았다. 풀숲 사이를 뒤지고, 돌 틈새를 살피다 보니 어느덧 해가 뉘엿뉘엿 기울었다.
+
+## 3장 — 토끼를 만나다
+
+이튿날 이른 아침, 자라는 마침내 토끼를 발견했다. 토끼는 아침 이슬이 맺힌 풀밭에서 한가로이 풀을 뜯으며 귀를 쫑긋 세우고 있었다.
+
+자라는 가장 친근한 표정을 지으며 다가갔다. "안녕하시오, 토끼 선생. 저는 남해 용왕마마의 신하 자라라고 하오. 오늘 특별히 좋은 소식을 전하러 왔소이다."
+
+토끼는 고개를 갸웃하며 자라를 바라보았다. "좋은 소식이라니 무슨 말씀이오?"
+
+자라는 목소리를 낮추며 신비롭게 말했다. "용궁에는 진귀한 보물이 가득하고, 맛있는 음식이 넘쳐 흐릅니다. 용왕마마께서는 재주 있고 현명한 분을 특별 손님으로 초청하고 계십니다. 제가 보기에 토끼 선생이야말로 그 자리에 딱 맞는 분인 듯하오이다."
+
+결국 토끼는 자라의 등에 올라탔다.
+
+## 4장 — 용궁에서의 위기
+
+드넓은 바다를 건너 용궁에 도착하자, 토끼는 그 화려한 광경에 눈이 휘둥그레졌다.
+
+곧 용왕이 나타나 사실을 말했다. "토끼야, 사실은 내 병을 고치기 위해 너의 간이 필요하다."
+
+토끼는 크게 놀랐으나, 이내 침착하게 생각을 가다듬었다. "오, 그렇습니까! 그런데 대왕마마, 저는 평소에 간이 안 좋아서 항상 간을 꺼내 깨끗이 씻어 육지의 바위 위에 널어두는 습관이 있습니다."
+
+## 5장 — 토끼의 꾀
+
+용왕은 어리둥절했다. "간을 꺼낼 수 있단 말이냐?"
+
+"물론이지요. 지금 당장 육지로 돌아가 간을 가져오겠습니다."
+
+결국 용왕은 자라에게 토끼를 육지까지 다시 데려다 주라고 명령했다.
+
+## 6장 — 귀환과 교훈
+
+자라의 등을 타고 육지에 도착하자마자 토끼는 날쌔게 뛰어내려 숲속으로 달아났다.
+
+숲 속에서 토끼는 크게 웃으며 소리쳤다. "어리석은 것들아!"
+
+이 이야기는 아무리 어렵고 위태로운 상황에서도 침착함과 재치를 잃지 않으면 위기를 벗어날 수 있다는 교훈을 전한다.`;
+
+// initial paint before auth resolves
+updateProgress();
+</script>
+</body>
+</html>
